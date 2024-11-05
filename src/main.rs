@@ -5,7 +5,7 @@ mod fmt;
 
 use core::f32::consts::PI;
 
-use defmt::println;
+use defmt::{info, println};
 #[cfg(not(feature = "defmt"))]
 use panic_halt as _;
 #[cfg(feature = "defmt")]
@@ -70,9 +70,11 @@ async fn main(_spawner: Spawner) {
     let mut prev_hole_b = hall_b.is_high();
     let mut prev_hole_c = hall_c.is_high();
 
-    let mut hall_status = 0;
+    let mut hall_status;
 
-    let mut theta;
+    let mut theta: f32 = 0.0;
+
+    let mut theta_speed: f32 = 0.0;
 
     loop {
         let now_time = Instant::now();
@@ -108,10 +110,18 @@ async fn main(_spawner: Spawner) {
                 (false, false, false) => 8, // bug
             };
 
-            // info!("hall status: {}", hall_status);
-        }
+            theta = hall_status as f32 * 60.0;
 
-        theta = hall_status as f32 * 60.0;
+            let tmp_theta_speed = 60.0 * (elapsed_hole_sensor.as_micros() as f32 / 1000.0 / 1000.0);
+            if tmp_theta_speed.is_normal() {
+                theta_speed = (tmp_theta_speed + theta_speed) / 2.0;
+            }
+
+            // info!("hall status: {}", hall_status);
+            // info!("theta: {}, theta_speed: {}", theta, theta_speed);
+        } else {
+            theta = theta + theta_speed * (elapsed.as_micros() as f32 / 1000.0 / 1000.0);
+        }
 
         let d = 0.0;
         let q = 1.0;
