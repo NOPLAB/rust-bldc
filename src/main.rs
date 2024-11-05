@@ -113,40 +113,6 @@ async fn main(_spawner: Spawner) {
 
         theta = hall_status as f32 * 60.0;
 
-        /*   match hall_status {
-            0 => {
-                u_enable.set_high();
-                v_enable.set_high();
-                w_enable.set_low();
-            }
-            1 => {
-                u_enable.set_high();
-                v_enable.set_low();
-                w_enable.set_high();
-            }
-            2 => {
-                u_enable.set_low();
-                v_enable.set_high();
-                w_enable.set_high();
-            }
-            3 => {
-                u_enable.set_high();
-                v_enable.set_high();
-                w_enable.set_low();
-            }
-            4 => {
-                u_enable.set_high();
-                v_enable.set_low();
-                w_enable.set_high();
-            }
-            5 => {
-                u_enable.set_low();
-                v_enable.set_high();
-                w_enable.set_high();
-            }
-            _ => {}
-        } */
-
         let d = 0.0;
         let q = 1.0;
 
