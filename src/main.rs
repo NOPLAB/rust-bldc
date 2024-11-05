@@ -70,11 +70,9 @@ async fn main(_spawner: Spawner) {
     let mut prev_hole_b = hall_b.is_high();
     let mut prev_hole_c = hall_c.is_high();
 
-    const ONCE_PER_REV: f32 = (2.0 * PI) / 3.0 / 2.0;
-
     let mut hall_status = 0;
 
-    let mut theta = 0.0;
+    let mut theta;
 
     loop {
         let now_time = Instant::now();
@@ -113,63 +111,72 @@ async fn main(_spawner: Spawner) {
             // info!("hall status: {}", hall_status);
         }
 
-        match hall_status {
-            0 => {
-                driver_pwm.set_duty(Channel::Ch1, driver_pwm.get_max_duty() as u16);
-                driver_pwm.set_duty(Channel::Ch2, 0);
-                driver_pwm.set_duty(Channel::Ch3, 0);
+        theta = hall_status as f32 * 60.0;
 
+        /*   match hall_status {
+            0 => {
                 u_enable.set_high();
                 v_enable.set_high();
                 w_enable.set_low();
             }
             1 => {
-                driver_pwm.set_duty(Channel::Ch1, 0);
-                driver_pwm.set_duty(Channel::Ch2, driver_pwm.get_max_duty() as u16);
-                driver_pwm.set_duty(Channel::Ch3, 0);
-
                 u_enable.set_high();
                 v_enable.set_low();
                 w_enable.set_high();
             }
             2 => {
-                driver_pwm.set_duty(Channel::Ch1, 0);
-                driver_pwm.set_duty(Channel::Ch2, driver_pwm.get_max_duty() as u16);
-                driver_pwm.set_duty(Channel::Ch3, 0);
-
                 u_enable.set_low();
                 v_enable.set_high();
                 w_enable.set_high();
             }
             3 => {
-                driver_pwm.set_duty(Channel::Ch1, 0);
-                driver_pwm.set_duty(Channel::Ch2, driver_pwm.get_max_duty() as u16);
-                driver_pwm.set_duty(Channel::Ch3, 0);
-
                 u_enable.set_high();
                 v_enable.set_high();
                 w_enable.set_low();
             }
             4 => {
-                driver_pwm.set_duty(Channel::Ch1, 0);
-                driver_pwm.set_duty(Channel::Ch2, 0);
-                driver_pwm.set_duty(Channel::Ch3, driver_pwm.get_max_duty() as u16);
-
                 u_enable.set_high();
                 v_enable.set_low();
                 w_enable.set_high();
             }
             5 => {
-                driver_pwm.set_duty(Channel::Ch1, 0);
-                driver_pwm.set_duty(Channel::Ch2, 0);
-                driver_pwm.set_duty(Channel::Ch3, driver_pwm.get_max_duty() as u16);
-
                 u_enable.set_low();
                 v_enable.set_high();
                 w_enable.set_high();
             }
             _ => {}
-        }
+        } */
+
+        let d = 0.0;
+        let q = 1.0;
+
+        // D, Q -> a, b
+
+        // a = D * cos(theta) - Q * sin(theta)
+        // b = D * sin(theta) + Q * cos(theta)
+        let a = d * libm::cosf(theta.to_radians()) - q * libm::sinf(theta.to_radians());
+        let b = d * libm::sinf(theta.to_radians()) + q * libm::cosf(theta.to_radians());
+
+        // a = 1/sqrt(6) * a
+        // b = 1/sqrt(2) * b
+        let a = 0.40824892046 * a;
+        let b = 0.70710678118 * b;
+
+        // u = 2.0 * a
+        // v = -a + b
+        // w = -a - b
+        let u = 2.0 * a;
+        let v = -a + b;
+        let w = -a - b;
+
+        // u, v, w -> duty
+        let u_duty = (u * 0.5 + 0.5) * driver_pwm.get_max_duty() as f32;
+        let v_duty = (v * 0.5 + 0.5) * driver_pwm.get_max_duty() as f32;
+        let w_duty = (w * 0.5 + 0.5) * driver_pwm.get_max_duty() as f32;
+
+        driver_pwm.set_duty(Channel::Ch1, u_duty as u16);
+        driver_pwm.set_duty(Channel::Ch2, v_duty as u16);
+        driver_pwm.set_duty(Channel::Ch3, w_duty as u16);
 
         led.toggle();
 
