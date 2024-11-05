@@ -3,6 +3,9 @@
 
 mod fmt;
 
+use core::f32::consts::PI;
+
+use defmt::println;
 #[cfg(not(feature = "defmt"))]
 use panic_halt as _;
 #[cfg(feature = "defmt")]
@@ -14,11 +17,10 @@ use embassy_stm32::{
     time::Hertz,
     timer::{
         simple_pwm::{PwmPin, SimplePwm},
-        Channel, CountingMode,
+        Channel,
     },
 };
-use embassy_time::{Duration, Timer};
-use fmt::info;
+use embassy_time::Instant;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -52,34 +54,125 @@ async fn main(_spawner: Spawner) {
 
     let mut led = Output::new(p.PA5, Level::High, Speed::Low);
 
-    let mut counter = 0;
-
     u_enable.set_high();
     v_enable.set_high();
     w_enable.set_high();
 
-    let mut sin_table = [0.0; 360];
-    for i in 0..360 {
-        sin_table[i] = libm::sinf(i as f32);
+    let mut sin_table = [0.0; 1024];
+    for i in 0..1024 {
+        sin_table[i] = libm::sinf(i as f32 * (1024.0 / (2.0 * PI)));
     }
 
+    let mut prev_time = Instant::now();
+    let mut prev_hole_sensor_time = Instant::now();
+
+    let mut prev_hole_a = hall_a.is_high();
+    let mut prev_hole_b = hall_b.is_high();
+    let mut prev_hole_c = hall_c.is_high();
+
+    const ONCE_PER_REV: f32 = (2.0 * PI) / 3.0 / 2.0;
+
+    let mut hall_status = 0;
+
+    let mut theta = 0.0;
+
     loop {
-        let angle_u = counter % 360;
-        let angle_v = (counter + 120) % 360;
-        let angle_w = (counter + 240) % 360;
+        let now_time = Instant::now();
+        let elapsed = now_time - prev_time;
+        prev_time = now_time;
 
-        let duty_u = driver_pwm.get_max_duty() as f32 / 2.0 * (1.0 + sin_table[angle_u]);
-        let duty_v = driver_pwm.get_max_duty() as f32 / 2.0 * (1.0 + sin_table[angle_v]);
-        let duty_w = driver_pwm.get_max_duty() as f32 / 2.0 * (1.0 + sin_table[angle_w]);
+        if prev_hole_a != hall_a.is_high()
+            || prev_hole_b != hall_b.is_high()
+            || prev_hole_c != hall_c.is_high()
+        {
+            let elapsed_hole_sensor = now_time - prev_hole_sensor_time;
+            prev_hole_sensor_time = now_time;
 
-        driver_pwm.set_duty(Channel::Ch1, duty_u as u16);
-        driver_pwm.set_duty(Channel::Ch2, duty_v as u16);
-        driver_pwm.set_duty(Channel::Ch3, duty_w as u16);
+            // info!(
+            //     "Hall A: {:?}, Hall B: {:?}, Hall C: {:?}",
+            //     hall_a.is_high(),
+            //     hall_b.is_high(),
+            //     hall_c.is_high()
+            // );
+
+            prev_hole_a = hall_a.is_high();
+            prev_hole_b = hall_b.is_high();
+            prev_hole_c = hall_c.is_high();
+
+            hall_status = match (hall_a.is_high(), hall_b.is_high(), hall_c.is_high()) {
+                (true, false, true) => 0,
+                (true, false, false) => 1,
+                (true, true, false) => 2,
+                (false, true, false) => 3,
+                (false, true, true) => 4,
+                (false, false, true) => 5,
+                (true, true, true) => 7,    // bug
+                (false, false, false) => 8, // bug
+            };
+
+            // info!("hall status: {}", hall_status);
+        }
+
+        match hall_status {
+            0 => {
+                driver_pwm.set_duty(Channel::Ch1, driver_pwm.get_max_duty() as u16);
+                driver_pwm.set_duty(Channel::Ch2, 0);
+                driver_pwm.set_duty(Channel::Ch3, 0);
+
+                u_enable.set_high();
+                v_enable.set_high();
+                w_enable.set_low();
+            }
+            1 => {
+                driver_pwm.set_duty(Channel::Ch1, 0);
+                driver_pwm.set_duty(Channel::Ch2, driver_pwm.get_max_duty() as u16);
+                driver_pwm.set_duty(Channel::Ch3, 0);
+
+                u_enable.set_high();
+                v_enable.set_low();
+                w_enable.set_high();
+            }
+            2 => {
+                driver_pwm.set_duty(Channel::Ch1, 0);
+                driver_pwm.set_duty(Channel::Ch2, driver_pwm.get_max_duty() as u16);
+                driver_pwm.set_duty(Channel::Ch3, 0);
+
+                u_enable.set_low();
+                v_enable.set_high();
+                w_enable.set_high();
+            }
+            3 => {
+                driver_pwm.set_duty(Channel::Ch1, 0);
+                driver_pwm.set_duty(Channel::Ch2, driver_pwm.get_max_duty() as u16);
+                driver_pwm.set_duty(Channel::Ch3, 0);
+
+                u_enable.set_high();
+                v_enable.set_high();
+                w_enable.set_low();
+            }
+            4 => {
+                driver_pwm.set_duty(Channel::Ch1, 0);
+                driver_pwm.set_duty(Channel::Ch2, 0);
+                driver_pwm.set_duty(Channel::Ch3, driver_pwm.get_max_duty() as u16);
+
+                u_enable.set_high();
+                v_enable.set_low();
+                w_enable.set_high();
+            }
+            5 => {
+                driver_pwm.set_duty(Channel::Ch1, 0);
+                driver_pwm.set_duty(Channel::Ch2, 0);
+                driver_pwm.set_duty(Channel::Ch3, driver_pwm.get_max_duty() as u16);
+
+                u_enable.set_low();
+                v_enable.set_high();
+                w_enable.set_high();
+            }
+            _ => {}
+        }
 
         led.toggle();
 
-        counter += 1;
-
-        Timer::after_millis(4).await;
+        // Timer::after_millis(5).await;
     }
 }
