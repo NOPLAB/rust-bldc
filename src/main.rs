@@ -74,7 +74,11 @@ async fn main(_spawner: Spawner) {
 
     let mut theta: f32 = 0.0;
 
-    let mut theta_speed: f32 = 0.0;
+    let mut rps: f32 = 0.0;
+
+    let mut target = 10.0;
+
+    let mut integral = 0.0;
 
     loop {
         let now_time = Instant::now();
@@ -112,19 +116,30 @@ async fn main(_spawner: Spawner) {
 
             theta = hall_status as f32 * 60.0;
 
-            let tmp_theta_speed = 60.0 * (elapsed_hole_sensor.as_micros() as f32 / 1000.0 / 1000.0);
-            if tmp_theta_speed.is_normal() {
-                theta_speed = (tmp_theta_speed + theta_speed) / 2.0;
-            }
+            rps =
+                (1.0 / (360.0 / 60.0)) / (elapsed_hole_sensor.as_micros() as f32 / 1000.0 / 1000.0);
 
             // info!("hall status: {}", hall_status);
-            // info!("theta: {}, theta_speed: {}", theta, theta_speed);
+            // info!("theta: {}, theta_speed: {}", theta, rps);
         } else {
-            theta = theta + theta_speed * (elapsed.as_micros() as f32 / 1000.0 / 1000.0);
+            theta += rps * elapsed.as_micros() as f32 / 1000.0;
+        }
+
+        let e = target - rps;
+        info!("e: {}", e);
+        let kp = 0.002;
+        let ki = 0.000005;
+        integral += ki * e;
+        let u = e * kp + integral;
+
+        if u > 1.0 {
+            target = 1.0;
+        } else if u < -1.0 {
+            target = -1.0;
         }
 
         let d = 0.0;
-        let q = 1.0;
+        let q = u;
 
         // D, Q -> a, b
 
