@@ -16,7 +16,7 @@ embassy-stm32 = { version = "0.1.0", features = ["memory-x", "stm32f446re", "tim
 embassy-sync = "0.6.0"
 embassy-time = { version = "0.3.2", features = ["tick-hz-32_768"] }
 libm = "0.2.8"
-panic-halt = "0.2.0"
+panic-halt = "1.0.0"
 panic-probe = { version = "0.3.2", features = ["print-defmt"], optional = true }
 
 [[bin]]
